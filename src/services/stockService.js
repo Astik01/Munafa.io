@@ -1,10 +1,10 @@
-// stockService.js — Yahoo Finance (no API key, no limits)
+// stockService.js — Yahoo Finance via Vite proxy
 
 const CACHE_TTL_MS = 30 * 1000; // 30 seconds
 const cache = {};
 
-// Yahoo Finance proxy (avoids CORS issues in browser)
-const YF_BASE = 'https://query1.finance.yahoo.com';
+// Vite dev proxy rewrites /api/yahoo → https://query1.finance.yahoo.com
+const API_BASE = '/api/yahoo';
 
 export const STOCKS = [
   { symbol: 'RELIANCE',   name: 'Reliance Industries',       sector: 'Energy',   color: '#FF9800' },
@@ -50,9 +50,7 @@ function toNumber(value) {
   return Number.isFinite(n) ? n : 0;
 }
 
-// ─── Yahoo Finance symbol format ─────────────────────────────────────────────
-// NSE stocks use .NS suffix e.g. TCS.NS, RELIANCE.NS
-// Nifty 50 index = ^NSEI
+// ─── Yahoo symbol helpers ────────────────────────────────────────────────────
 
 function toYFSymbol(symbol) {
   return `${symbol}.NS`;
@@ -60,30 +58,36 @@ function toYFSymbol(symbol) {
 
 // ─── Range → Yahoo Finance params ────────────────────────────────────────────
 
-function buildChartParams(range) {
+export function buildChartParams(range) {
   switch (range) {
     case '1D': return { interval: '5m',  range: '1d'  };
+    case '5D': return { interval: '15m', range: '5d'  };
     case '1W': return { interval: '1h',  range: '5d'  };
     case '1M': return { interval: '1d',  range: '1mo' };
     case '3M': return { interval: '1d',  range: '3mo' };
+    case '6M': return { interval: '1d',  range: '6mo' };
     case '1Y': return { interval: '1wk', range: '1y'  };
     default:   return { interval: '1d',  range: '1mo' };
   }
 }
 
-// ─── Fetch single stock quote ─────────────────────────────────────────────────
+// ─── Fetch raw Yahoo chart result ────────────────────────────────────────────
 
-async function fetchQuote(yfSymbol) {
-  const url = `${YF_BASE}/v8/finance/chart/${yfSymbol}?interval=1d&range=5d`;
-  const res = await fetch(url, {
-    headers: { 'Accept': 'application/json' }
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status} for ${yfSymbol}`);
+async function fetchYahooChart(yfSymbol, interval, range) {
+  const url = `${API_BASE}/v8/finance/chart/${encodeURIComponent(yfSymbol)}?interval=${interval}&range=${range}`;
+  const res = await fetch(url, { headers: { Accept: 'application/json' } });
+  if (!res.ok) {
+    const err = new Error(`HTTP ${res.status} for ${yfSymbol}`);
+    err.code = res.status;
+    throw err;
+  }
   const data = await res.json();
   const result = data?.chart?.result?.[0];
   if (!result) throw new Error(`No data for ${yfSymbol}`);
   return result;
 }
+
+// ─── Parse a quote from Yahoo chart response ─────────────────────────────────
 
 function parseQuote(result, meta) {
   const q = result.meta;
@@ -99,8 +103,6 @@ function parseQuote(result, meta) {
   const change        = price - previousClose;
   const changePercent = previousClose !== 0 ? (change / previousClose) * 100 : 0;
 
-  // Last valid values from series
-  const lastClose  = closes.filter(Boolean).at(-1) ?? price;
   const lastOpen   = opens.filter(Boolean).at(-1)  ?? 0;
   const lastHigh   = highs.filter(Boolean).at(-1)  ?? 0;
   const lastLow    = lows.filter(Boolean).at(-1)   ?? 0;
@@ -125,7 +127,24 @@ function parseQuote(result, meta) {
   };
 }
 
-// ─── Public API ───────────────────────────────────────────────────────────────
+// ─── Public: Fetch a chunk of stocks ─────────────────────────────────────────
+
+export async function fetchStocksChunk(symbolList) {
+  const results = await Promise.allSettled(
+    symbolList.map(async (sym) => {
+      const meta = STOCKS.find((s) => s.symbol === sym) || {
+        symbol: sym, name: sym, sector: '', color: '#666',
+      };
+      const result = await fetchYahooChart(toYFSymbol(sym), '1d', '5d');
+      return parseQuote(result, meta);
+    })
+  );
+  return results
+    .filter((r) => r.status === 'fulfilled' && r.value)
+    .map((r) => r.value);
+}
+
+// ─── Public: Fetch all stocks ────────────────────────────────────────────────
 
 export async function fetchAllStocks() {
   const cacheKey = 'allStocks';
@@ -133,11 +152,9 @@ export async function fetchAllStocks() {
   if (cached) return cached;
 
   try {
-    // Fetch all stocks in parallel
     const results = await Promise.allSettled(
       STOCKS.map(async (meta) => {
-        const yfSymbol = toYFSymbol(meta.symbol);
-        const result = await fetchQuote(yfSymbol);
+        const result = await fetchYahooChart(toYFSymbol(meta.symbol), '1d', '5d');
         return parseQuote(result, meta);
       })
     );
@@ -145,17 +162,11 @@ export async function fetchAllStocks() {
     const stocks = results.map((r, i) => {
       if (r.status === 'fulfilled') return r.value;
       console.error(`Failed to fetch ${STOCKS[i].symbol}:`, r.reason);
-      // Return empty stock so UI doesn't break
       return {
-        id: STOCKS[i].symbol,
-        symbol: STOCKS[i].symbol,
-        name: STOCKS[i].name,
-        sector: STOCKS[i].sector,
-        color: STOCKS[i].color,
-        price: 0, change: 0, changePercent: 0,
-        open: 0, high: 0, low: 0,
-        previousClose: 0, volume: 0,
-        fiftyTwoWeekHigh: 0, fiftyTwoWeekLow: 0,
+        id: STOCKS[i].symbol, symbol: STOCKS[i].symbol, name: STOCKS[i].name,
+        sector: STOCKS[i].sector, color: STOCKS[i].color,
+        price: 0, change: 0, changePercent: 0, open: 0, high: 0, low: 0,
+        previousClose: 0, volume: 0, fiftyTwoWeekHigh: 0, fiftyTwoWeekLow: 0,
       };
     });
 
@@ -167,6 +178,8 @@ export async function fetchAllStocks() {
   }
 }
 
+// ─── Public: Fetch OHLC chart data ───────────────────────────────────────────
+
 export async function fetchStockChart(symbol, range) {
   const cacheKey = `chart:${symbol}:${range}`;
   const cached = getCached(cacheKey);
@@ -175,28 +188,20 @@ export async function fetchStockChart(symbol, range) {
   try {
     const { interval, range: yfRange } = buildChartParams(range);
     const yfSymbol = toYFSymbol(symbol);
-    const url = `${YF_BASE}/v8/finance/chart/${yfSymbol}?interval=${interval}&range=${yfRange}`;
-
-    const res = await fetch(url, {
-      headers: { 'Accept': 'application/json' }
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-    const data = await res.json();
-    const result = data?.chart?.result?.[0];
-    if (!result) throw new Error('No chart data');
+    const result = await fetchYahooChart(yfSymbol, interval, yfRange);
 
     const timestamps = result.timestamp || [];
     const q = result.indicators?.quote?.[0] || {};
 
     const chartData = timestamps.map((ts, i) => ({
       timestamp: new Date(ts * 1000).toISOString(),
+      time: ts,
       open:   toNumber(q.open?.[i]),
       high:   toNumber(q.high?.[i]),
       low:    toNumber(q.low?.[i]),
       close:  toNumber(q.close?.[i]),
       volume: toNumber(q.volume?.[i]),
-    })).filter(d => d.close > 0); // remove empty candles
+    })).filter(d => d.close > 0);
 
     setCache(cacheKey, chartData);
     return chartData;
@@ -206,32 +211,78 @@ export async function fetchStockChart(symbol, range) {
   }
 }
 
-export async function fetchNifty() {
-  const cacheKey = 'nifty';
+// ─── Public: Fetch single index quote ────────────────────────────────────────
+
+export async function fetchIndexQuote(yahooSymbol) {
+  const cacheKey = `index:${yahooSymbol}`;
   const cached = getCached(cacheKey);
   if (cached) return cached;
 
   try {
-    const url = `${YF_BASE}/v8/finance/chart/%5ENSETP?interval=1d&range=5d`;
-    const res = await fetch(url, {
-      headers: { 'Accept': 'application/json' }
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-    const data = await res.json();
-    const meta = data?.chart?.result?.[0]?.meta;
-    if (!meta) return null;
+    const result = await fetchYahooChart(yahooSymbol, '1d', '5d');
+    const meta = result.meta;
+    const timestamps = result.timestamp || [];
+    const closes = result.indicators?.quote?.[0]?.close || [];
 
     const price         = toNumber(meta.regularMarketPrice);
     const previousClose = toNumber(meta.chartPreviousClose ?? meta.previousClose);
     const change        = price - previousClose;
     const changePercent = previousClose !== 0 ? (change / previousClose) * 100 : 0;
 
-    const result = { price, change, changePercent };
-    setCache(cacheKey, result);
-    return result;
+    // Last 5 valid closing prices for sparkline
+    const sparkline = closes.filter(Boolean).slice(-5);
+
+    const data = { price, change, changePercent, sparkline };
+    setCache(cacheKey, data);
+    return data;
   } catch (err) {
-    console.error('fetchNifty error:', err);
+    console.error(`fetchIndexQuote error (${yahooSymbol}):`, err);
     return null;
   }
+}
+
+// ─── Public: Fetch Nifty 50 ──────────────────────────────────────────────────
+
+export async function fetchNifty() {
+  return fetchIndexQuote('^NSEI');
+}
+
+// ─── Public: Fetch a batch of stock quotes by symbol ─────────────────────────
+
+export async function fetchStocksBatch(symbols, batchSize = 10) {
+  const all = [];
+  for (let i = 0; i < symbols.length; i += batchSize) {
+    const batch = symbols.slice(i, i + batchSize);
+    const results = await Promise.allSettled(
+      batch.map(async (sym) => {
+        const result = await fetchYahooChart(toYFSymbol(sym), '1d', '5d');
+        const q = result.meta;
+        const indicators = result.indicators?.quote?.[0] || {};
+        const price         = toNumber(q.regularMarketPrice);
+        const previousClose = toNumber(q.chartPreviousClose ?? q.previousClose);
+        const change        = price - previousClose;
+        const changePercent = previousClose !== 0 ? (change / previousClose) * 100 : 0;
+
+        return {
+          symbol: sym,
+          name: sym,
+          price,
+          change: toNumber(change),
+          changePercent: toNumber(changePercent),
+          open:             toNumber(q.regularMarketOpen ?? 0),
+          high:             toNumber(q.regularMarketDayHigh ?? 0),
+          low:              toNumber(q.regularMarketDayLow ?? 0),
+          previousClose,
+          volume:           toNumber(q.regularMarketVolume ?? 0),
+          fiftyTwoWeekHigh: toNumber(q.fiftyTwoWeekHigh),
+          fiftyTwoWeekLow:  toNumber(q.fiftyTwoWeekLow),
+          marketCap:        0,
+        };
+      })
+    );
+    results.forEach((r) => {
+      if (r.status === 'fulfilled' && r.value) all.push(r.value);
+    });
+  }
+  return all;
 }
