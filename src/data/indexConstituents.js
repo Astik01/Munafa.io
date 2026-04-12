@@ -21,11 +21,6 @@ export const INDEX_META = {
     name: 'NIFTY IT',
     yahooSymbol: '^CNXIT',
   },
-  midcap100: {
-    id: 'midcap100',
-    name: 'NIFTY MIDCAP 100',
-    yahooSymbol: '^CNXMIDCAP',
-  },
   finnifty: {
     id: 'finnifty',
     name: 'FINNIFTY',
@@ -62,11 +57,6 @@ export const INDEX_CONSTITUENTS = {
   niftyit: [
     'TCS', 'INFY', 'HCLTECH', 'WIPRO', 'TECHM',
     'MPHASIS', 'LTIM', 'PERSISTENT', 'COFORGE', 'OFSS',
-  ],
-  midcap100: [
-    'TRENT', 'PERSISTENT', 'MAXHEALTH', 'INDHOTEL', 'GODREJCP',
-    'MPHASIS', 'COFORGE', 'AUBANK', 'FEDERALBNK', 'BANDHANBNK',
-    'RBLBANK', 'IDFCFIRSTB', 'PNB', 'HUDCO', 'NHPC',
   ],
   finnifty: [
     'HDFCBANK', 'ICICIBANK', 'KOTAKBANK', 'AXISBANK', 'SBIN',

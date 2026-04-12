@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Box, Container, Snackbar, Alert, Typography } from '@mui/material';
 import Navbar from './Navbar';
-import HeroBackground from './HeroBackground';
 import IndexCards from './IndexCards';
 import FIIDIIChart from './FIIDIIChart';
 import MostActive from './MostActive';
@@ -78,7 +77,6 @@ function Dashboard() {
           </Typography>
         </Box>
 
-        <HeroBackground />
         <IndexCards />
         <FIIDIIChart />
         <MostActive />

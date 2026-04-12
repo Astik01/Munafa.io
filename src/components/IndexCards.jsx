@@ -12,7 +12,6 @@ const INDEX_LIST = [
   { ...INDEX_META.sensex,    routeId: 'sensex' },
   { ...INDEX_META.banknifty, routeId: 'banknifty' },
   { ...INDEX_META.niftyit,   routeId: 'niftyit' },
-  { ...INDEX_META.midcap100, routeId: 'midcap100' },
   { ...INDEX_META.finnifty,  routeId: 'finnifty' },
 ];
 
