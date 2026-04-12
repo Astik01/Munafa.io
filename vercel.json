@@ -1,4 +1,6 @@
 {
+  "installCommand": "npm ci",
+  "buildCommand": "npx --yes vite build",
   "rewrites": [
     {
       "source": "/api/yahoo/:path*",
