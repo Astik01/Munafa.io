@@ -88,7 +88,7 @@ function Dashboard() {
             onClick={() => setCompareOpen(true)}
             sx={{ borderRadius: 999 }}
           >
-            Compare Stocks
+            Compare Stocks  
           </Button>
         </Box>
 

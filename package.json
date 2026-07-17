@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "vite --host --port 5173",
     "build": "npx vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@emotion/react": "^11.13.0",
@@ -20,7 +22,7 @@
     "three": "^0.183.2"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^4.3.4",
-    "vite": "^5.4.8"
-  }
+  "vitest": "^2.1.8",
+  "@vitest/ui": "^2.1.8"
+}
 }
