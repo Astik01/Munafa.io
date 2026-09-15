@@ -131,6 +131,29 @@ self-contained page -- no build step, no external assets, safe to hand
 someone or attach to a CI run as-is). Both are gitignored; they're a run
 artifact, not source.
 
+## CI
+
+`.github/workflows/ci.yml` runs this suite in a `python-api-testing` job
+alongside (not instead of) the existing frontend Vitest job:
+
+1. Starts `npm run dev` and waits for it to answer, so tests hit a local
+   `/api/yahoo/*` proxy rather than production.
+2. `pytest unit` -- offline, deterministic, **gates the build**.
+3. `pytest integration api generated/approved --ai-analyze` -- exercises the
+   live (well, locally-proxied) Yahoo dependency. Marked
+   `continue-on-error: true`: a failure here can mean the code regressed, or
+   it can mean Yahoo/the proxy is having a bad day, and a third-party
+   dependency's flakiness shouldn't block merges the way a real regression
+   should. `ANTHROPIC_API_KEY` comes from a repo secret if set; the step
+   degrades gracefully if it isn't (see Failure analysis above).
+4. Uploads `reports/latest.{json,html}` as a workflow artifact either way.
+
+Deliberately not run in CI: `ai/generate_test_plan.py` and
+`generate_tests.py`. Generating tests calls a paid API and produces files
+meant for human review (see the review gate above) -- doing that on every
+push would both cost money on every commit and quietly bypass the gate. CI
+only *runs* whatever's already been reviewed into `generated/approved/`.
+
 ## Known production finding
 
 While validating this suite, it caught a real issue: the `/api/yahoo/*`
@@ -138,4 +161,6 @@ proxy is rate-limited by the hosting edge network independently of Yahoo's
 own limits -- a burst of as few as 4-5 requests in a couple of seconds
 returns `429 Edge: Too Many Requests` (plain text, not JSON), and the
 frontend's `fetchYahooChart()` has no special handling for it. See
-`api/test_yahoo_chart_endpoint.py`.
+`api/test_yahoo_chart_endpoint.py`. It's also why the CI job above proxies
+locally instead of testing against production, and why the live-endpoint
+step is non-blocking.
