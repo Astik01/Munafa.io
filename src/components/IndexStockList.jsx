@@ -167,7 +167,7 @@ function IndexStockList() {
     return (
       <Box sx={{ minHeight: '100vh' }}>
         <Navbar />
-        <Container maxWidth="lg" sx={{ py: 4, textAlign: 'center' }}>
+        <Container maxWidth={false} sx={{ py: 4, px: { xs: 2, sm: 3, md: 4 }, textAlign: 'center' }}>
           <Typography variant="h5">Index "{indexSymbol}" not found</Typography>
           <Button onClick={() => navigate('/')} sx={{ mt: 2 }}>Back to Dashboard</Button>
         </Container>
@@ -179,7 +179,7 @@ function IndexStockList() {
     <Box sx={{ minHeight: '100vh' }}>
       <Navbar />
 
-      <Container maxWidth="lg" sx={{ py: 3 }}>
+      <Container maxWidth={false} sx={{ py: 3, px: { xs: 2, sm: 3, md: 4 } }}>
         {/* ── Back + header ── */}
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, flexWrap: 'wrap', gap: 1 }}>
           <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/')}

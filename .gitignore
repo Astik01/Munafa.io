@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.env
+*.local
+
+# Python testing/ layer
+testing/.venv/
+testing/venv/
+testing/__pycache__/
+testing/**/__pycache__/
+testing/.pytest_cache/
+testing/reports/
+*.pyc

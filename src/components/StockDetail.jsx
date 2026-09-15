@@ -191,7 +191,7 @@ function StockDetail() {
     <Box sx={{ minHeight: '100vh' }}>
       <Navbar />
 
-      <Container maxWidth="lg" sx={{ py: 3 }}>
+      <Container maxWidth={false} sx={{ py: 3, px: { xs: 2, sm: 3, md: 4 } }}>
         {/* Back button */}
         <Box sx={{ mb: 2 }}>
           <Button

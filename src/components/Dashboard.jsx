@@ -66,7 +66,7 @@ function Dashboard() {
     <Box sx={{ minHeight: '100vh' }}>
       <Navbar lastUpdated={lastUpdated} onRefresh={handleRefresh} refreshing={refreshing} />
 
-      <Container maxWidth="lg" sx={{ py: 3, display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <Container maxWidth={false} sx={{ py: 3, px: { xs: 2, sm: 3, md: 4 }, display: 'flex', flexDirection: 'column', gap: 4 }}>
      {/* Market status */}
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', animation: 'fadeIn 0.3s ease', flexWrap: 'wrap', gap: 1.5 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
