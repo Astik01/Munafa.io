@@ -15,6 +15,38 @@ const TIME_RANGES = ['1M', '3M', '6M', '1Y'];
 const MAX_STOCKS = 5;
 const LINE_COLORS = ['#5C6BC0', '#26A65B', '#E74C3C', '#F39C12', '#9C27B0'];
 
+// Turns [{symbol, data: [{timestamp, close}, ...]}, ...] (one series per
+// selected stock, in that stock's own currency/price) into one row-per-
+// timestamp dataset normalized to % change from each series' own first
+// valid close, suitable for a single multi-line chart. Exported as a pure
+// function so it's unit-testable without mounting the modal.
+export function buildComparisonSeries(results) {
+  const normalized = results.map(({ symbol, data }) => {
+    const firstClose = data.find((d) => d.close > 0)?.close;
+    return {
+      symbol,
+      points: data
+        .filter((d) => d.close > 0)
+        .map((d) => ({
+          timestamp: d.timestamp,
+          pct: firstClose ? ((d.close - firstClose) / firstClose) * 100 : 0,
+        })),
+    };
+  });
+
+  const rowMap = new Map();
+  normalized.forEach(({ symbol, points }) => {
+    points.forEach(({ timestamp, pct }) => {
+      if (!rowMap.has(timestamp)) rowMap.set(timestamp, { timestamp });
+      rowMap.get(timestamp)[symbol] = pct;
+    });
+  });
+
+  return Array.from(rowMap.values()).sort(
+    (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
+  );
+}
+
 function CompareTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   return (
@@ -70,32 +102,7 @@ function CompareModal({ open, onClose }) {
         );
         if (cancelled) return;
 
-        // Normalize each series to % change from its own first close
-        const normalized = results.map(({ symbol, data }) => {
-          const firstClose = data.find((d) => d.close > 0)?.close;
-          return {
-            symbol,
-            points: data
-              .filter((d) => d.close > 0)
-              .map((d) => ({
-                timestamp: d.timestamp,
-                pct: firstClose ? ((d.close - firstClose) / firstClose) * 100 : 0,
-              })),
-          };
-        });
-
-        // Merge into one row-per-timestamp dataset (union of all timestamps)
-        const rowMap = new Map();
-        normalized.forEach(({ symbol, points }) => {
-          points.forEach(({ timestamp, pct }) => {
-            if (!rowMap.has(timestamp)) rowMap.set(timestamp, { timestamp });
-            rowMap.get(timestamp)[symbol] = pct;
-          });
-        });
-
-        const merged = Array.from(rowMap.values()).sort(
-          (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
-        );
+        const merged = buildComparisonSeries(results);
 
         if (!cancelled) setChartData(merged);
       } catch (e) {

@@ -97,6 +97,9 @@ describe('formatDate', () => {
   it('returns a "D Mon" style date for a timestamp not from today', () => {
     const pastDate = new Date();
     pastDate.setDate(pastDate.getDate() - 5);
-    expect(formatDate(pastDate.toISOString())).toMatch(/^\d{1,2}\s[A-Za-z]{3}$/);
+    // 3-4 letters: en-IN's short month form is "Sept" for September (CLDR),
+    // 3 letters for everything else -- not a formatDate bug, just a test
+    // assumption that was too strict.
+    expect(formatDate(pastDate.toISOString())).toMatch(/^\d{1,2}\s[A-Za-z]{3,4}$/);
   });
 });

@@ -6,8 +6,9 @@
     "dev": "vite --host --port 5173",
     "build": "npx vite build",
     "preview": "vite preview",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "test": "vitest run --exclude \"**/node_modules/**\" --exclude \"**/dist/**\" --exclude \"**/*.integration.test.*\"",
+    "test:watch": "vitest",
+    "test:integration": "vitest run src/services/stockService.integration.test.js"
   },
   "dependencies": {
     "@emotion/react": "^11.13.0",

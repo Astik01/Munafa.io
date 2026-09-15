@@ -1,6 +1,6 @@
 // stockService.js — Yahoo Finance via Vite proxy
 
-const CACHE_TTL_MS = 30 * 1000; // 30 seconds
+export const CACHE_TTL_MS = 30 * 1000; // 30 seconds
 const cache = {};
 
 // Vite dev proxy rewrites /api/yahoo → https://query1.finance.yahoo.com

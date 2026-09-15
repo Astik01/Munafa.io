@@ -3,7 +3,9 @@ import {
   buildChartParams,
   fetchStocksChunk,
   fetchStockChart,
+  fetchAllStocks,
   STOCKS,
+  CACHE_TTL_MS,
 } from './stockService';
 
 function mockYahooChartResponse({ price = 100, prevClose = 95, timestamps = [], quote = {} } = {}) {
@@ -128,4 +130,67 @@ describe('fetchStockChart', () => {
     const result = await fetchStockChart('NOCACHE_TEST_SYMBOL', '3M');
     expect(result).toEqual([]);
   });
-}); 
+});
+
+describe('caching layer', () => {
+  // Each test below uses symbols/ranges not touched by the describe blocks
+  // above -- the module-level cache persists for the lifetime of this file's
+  // test run, so key collisions would make these tests order-dependent.
+  beforeEach(() => {
+    global.fetch = vi.fn();
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  it('fetchStockChart serves a second call for the same symbol+range from cache, not a new fetch', async () => {
+    global.fetch.mockResolvedValue(mockYahooChartResponse({
+      timestamps: [1700000000],
+      quote: { open: [10], high: [11], low: [9], close: [10], volume: [100] },
+    }));
+
+    const first = await fetchStockChart('CACHE_HIT_TEST', '6M');
+    const second = await fetchStockChart('CACHE_HIT_TEST', '6M');
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(second).toEqual(first);
+  });
+
+  it('fetchStockChart treats different symbol/range pairs as separate cache keys', async () => {
+    global.fetch.mockResolvedValue(mockYahooChartResponse({
+      timestamps: [1700000000],
+      quote: { open: [10], high: [11], low: [9], close: [10], volume: [100] },
+    }));
+
+    await fetchStockChart('CACHE_KEY_TEST_A', '6M');
+    await fetchStockChart('CACHE_KEY_TEST_B', '6M');
+
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('fetchStockChart re-fetches once the cache entry has expired', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    global.fetch.mockResolvedValue(mockYahooChartResponse({
+      timestamps: [1700000000],
+      quote: { open: [10], high: [11], low: [9], close: [10], volume: [100] },
+    }));
+
+    await fetchStockChart('CACHE_TTL_TEST', '6M');
+    vi.setSystemTime(CACHE_TTL_MS + 1); // just past the TTL
+    await fetchStockChart('CACHE_TTL_TEST', '6M');
+
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('fetchAllStocks serves a second call from cache, not a new fetch', async () => {
+    global.fetch.mockResolvedValue(mockYahooChartResponse({ price: 50, prevClose: 48 }));
+
+    await fetchAllStocks();
+    await fetchAllStocks();
+
+    // One fetch per STOCKS entry on the first call, zero on the second.
+    expect(global.fetch).toHaveBeenCalledTimes(STOCKS.length);
+  });
+});
