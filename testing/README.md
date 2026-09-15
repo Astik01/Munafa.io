@@ -28,6 +28,7 @@ testing/
     test_data_generator.py TestDataGenerator -- valid/invalid/edge payloads
     validators.py         ResponseValidator -- status/shape/timing assertions
     reporter.py           TestReporter -- aggregates results into JSON
+    html_report.py         renders TestReporter's data as a self-contained HTML page
   ai/
     client.py             Anthropic API wrapper
     generate_test_plan.py  spec -> AI-generated test PLAN (JSON, schema-checked)
@@ -120,6 +121,15 @@ it's approved.
 ```bash
 python ai/validate_generated.py generated/pending/test_ai_generated.py
 ```
+
+## Reports
+
+Every run writes both `reports/latest.json` (machine-readable: total/passed/
+failed/skipped, pass rate, and the full per-test list with endpoint + reason
+for each failure) and `reports/latest.html` (the same data as a single
+self-contained page -- no build step, no external assets, safe to hand
+someone or attach to a CI run as-is). Both are gitignored; they're a run
+artifact, not source.
 
 ## Known production finding
 

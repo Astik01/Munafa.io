@@ -18,9 +18,11 @@ if TESTING_DIR not in sys.path:
     sys.path.insert(0, TESTING_DIR)
 
 from utils.api_client import APIClient  # noqa: E402
+from utils.html_report import write_html  # noqa: E402
 from utils.reporter import TestReporter  # noqa: E402
 
-REPORT_PATH = os.path.join(TESTING_DIR, "reports", "latest.json")
+REPORT_JSON_PATH = os.path.join(TESTING_DIR, "reports", "latest.json")
+REPORT_HTML_PATH = os.path.join(TESTING_DIR, "reports", "latest.html")
 
 
 @pytest.fixture(scope="session")
@@ -81,11 +83,13 @@ def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo) -> None:
 
 def pytest_sessionfinish(session: pytest.Session) -> None:
     reporter: TestReporter = session.config._munafa_reporter
-    reporter.write_json(REPORT_PATH)
+    report = reporter.to_dict()
+    reporter.write_json(REPORT_JSON_PATH)
+    write_html(report, REPORT_HTML_PATH)
     summary = reporter.summary()
     print(
         f"\n[TestReporter] {summary['passed']}/{summary['total']} passed "
-        f"({summary['pass_rate']}%) -> {REPORT_PATH}"
+        f"({summary['pass_rate']}%) -> {REPORT_JSON_PATH}, {REPORT_HTML_PATH}"
     )
 
     if summary["failed"] and session.config.getoption("--ai-analyze"):
