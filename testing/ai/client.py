@@ -1,7 +1,8 @@
-"""Thin wrapper around the Anthropic API for AI-assisted test-plan
-generation. Kept separate from testing/utils/api_client.py because this one
-talks to Anthropic, not to Munafa's own surface -- different dependency,
-different failure modes, shouldn't share a class.
+"""Thin wrapper around the Anthropic API for the two AI-assisted steps:
+test-plan generation and failure analysis (analyze_failures.py). Kept
+separate from testing/utils/api_client.py because this one talks to
+Anthropic, not to Munafa's own surface -- different dependency, different
+failure modes, shouldn't share a class.
 """
 from __future__ import annotations
 
@@ -26,6 +27,18 @@ def _client() -> anthropic.Anthropic:
             "and fill it in -- this step needs a real key, there's no offline fallback."
         )
     return anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+
+
+def call_claude_text(system_prompt: str, user_prompt: str, max_tokens: int = 1024) -> str:
+    """Like call_claude_json but for prose output (failure analysis) --
+    no JSON parsing, no fence stripping."""
+    response = _client().messages.create(
+        model=ANTHROPIC_MODEL,
+        max_tokens=max_tokens,
+        system=system_prompt,
+        messages=[{"role": "user", "content": user_prompt}],
+    )
+    return "".join(block.text for block in response.content if block.type == "text").strip()
 
 
 def call_claude_json(system_prompt: str, user_prompt: str, max_tokens: int = 4096) -> dict:

@@ -32,6 +32,7 @@ testing/
     client.py             Anthropic API wrapper
     generate_test_plan.py  spec -> AI-generated test PLAN (JSON, schema-checked)
     generate_tests.py      plan -> pytest file (templated, not AI-written code)
+    analyze_failures.py    pytest report -> plain-English failure analysis
   unit/          tests of the framework's own utilities (no network)
   integration/   multi-step flows against the live proxy
   api/           single-endpoint contract tests against the live proxy
@@ -81,6 +82,22 @@ suite, and nothing is silently merged. To promote a reviewed file:
 ```bash
 cp generated/pending/test_ai_generated.py generated/approved/
 pytest generated/approved/test_ai_generated.py -v   # confirm it behaves as expected
+```
+
+## Failure analysis
+
+`pytest --ai-analyze` sends the structured failure list from
+`reports/latest.json` to Claude after a run and prints a short root-cause
+summary (grouped by pattern, not one line per test) alongside the normal
+pytest output -- what failed, a likely category (auth/validation/rate-limit/
+upstream-data/network/test-bug), and a concrete next step. It's opt-in: a
+plain `pytest` never calls the API or needs a key, and if the key is missing
+or the call fails, analysis is skipped with a one-line notice rather than
+breaking an otherwise-valid test run.
+
+```bash
+pytest --ai-analyze   # same run, plus a summary if anything failed
+python ai/analyze_failures.py --report reports/latest.json   # standalone
 ```
 
 ## Known production finding

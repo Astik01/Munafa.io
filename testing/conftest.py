@@ -46,6 +46,17 @@ def endpoint_recorder(request):
     return _record
 
 
+def pytest_addoption(parser: pytest.Parser) -> None:
+    parser.addoption(
+        "--ai-analyze",
+        action="store_true",
+        default=False,
+        help="On failures, send the failure list to Claude for a plain-English root-cause "
+        "summary (see ai/analyze_failures.py). Opt-in: off by default so a plain `pytest` "
+        "run never makes an API call or needs a key.",
+    )
+
+
 def pytest_configure(config: pytest.Config) -> None:
     config._munafa_reporter = TestReporter()
     config.addinivalue_line("markers", "security: marks tests probing injection/auth-bypass style inputs")
@@ -76,3 +87,14 @@ def pytest_sessionfinish(session: pytest.Session) -> None:
         f"\n[TestReporter] {summary['passed']}/{summary['total']} passed "
         f"({summary['pass_rate']}%) -> {REPORT_PATH}"
     )
+
+    if summary["failed"] and session.config.getoption("--ai-analyze"):
+        from ai.analyze_failures import AnthropicNotConfigured, summarize
+
+        print("\n[ai-analyze] asking Claude for a root-cause summary of the failures above...\n")
+        try:
+            print(summarize(reporter.to_dict()))
+        except AnthropicNotConfigured as exc:
+            print(f"[ai-analyze] skipped: {exc}")
+        except Exception as exc:  # never let analysis break an otherwise-valid test run
+            print(f"[ai-analyze] skipped due to an error calling Claude: {exc}")
