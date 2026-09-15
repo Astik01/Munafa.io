@@ -106,7 +106,10 @@ function NewsFeed() {
   }, [activeTab, news]);
 
   return (
-    <Box sx={{ animation: 'slideUp 0.4s ease 0.35s', animationFillMode: 'both' }}>
+    <Box
+      id="news"
+      sx={{ animation: 'slideUp 0.4s ease 0.35s', animationFillMode: 'both', scrollMarginTop: '80px' }}
+    >
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
         <Typography className="section-title" sx={{ mb: '0 !important' }}>
           Market News

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Box, Container, Snackbar, Alert, Typography, Button } from '@mui/material';
 import BarChartIcon from '@mui/icons-material/BarChart';
 import Navbar from './Navbar';
@@ -17,6 +18,7 @@ import { getMarketStatus } from '../utils/marketUtils';
 const REFRESH_INTERVAL = Number(import.meta.env.VITE_REFRESH_INTERVAL) || 300000;
 
 function Dashboard() {
+  const location = useLocation();
   const [stocks, setStocks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -42,6 +44,16 @@ function Dashboard() {
     const id = setInterval(loadAllData, REFRESH_INTERVAL);
     return () => clearInterval(id);
   }, [loadAllData]);
+
+  // React Router's client-side navigate() doesn't auto-scroll to a hash the
+  // way a real browser navigation does, so the News tab's link to /#news
+  // (see Navbar.jsx) needs this to actually land on the news section
+  // instead of just the top of the page.
+  useEffect(() => {
+    if (!location.hash) return;
+    const el = document.querySelector(location.hash);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [location.hash]);
 
   const handleRefresh = async () => {
     setRefreshing(true);

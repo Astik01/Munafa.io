@@ -23,7 +23,10 @@ const NAV_TABS = [
   { label: 'Dashboard', path: '/' },
   { label: 'Indices',   path: '/index/nifty50' },
   { label: 'Watchlist',  path: '/watchlist' },
-  { label: 'News',      path: '/' },
+  // NewsFeed is a section on the dashboard (see Dashboard.jsx), not a
+  // separate route -- link to its anchor so this actually lands on the
+  // news section instead of just the top of the home page.
+  { label: 'News',      path: '/#news' },
 ];
 
 function Navbar({ lastUpdated, onRefresh, refreshing }) {
@@ -54,6 +57,7 @@ function Navbar({ lastUpdated, onRefresh, refreshing }) {
   const activeTab = (() => {
     if (location.pathname.startsWith('/index')) return 1;
     if (location.pathname === '/watchlist') return 2;
+    if (location.pathname === '/' && location.hash === '#news') return 3;
     if (location.pathname === '/') return 0;
     return 0;
   })();
