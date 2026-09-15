@@ -100,6 +100,27 @@ pytest --ai-analyze   # same run, plus a summary if anything failed
 python ai/analyze_failures.py --report reports/latest.json   # standalone
 ```
 
+## Reliability
+
+`utils/retry.py` wraps `APIClient.get_raw` with retry-with-backoff: a
+`ConnectionError`/`Timeout`, or a 429/502/503/504 response, is retried up to
+`MUNAFA_MAX_RETRIES` times (exponential backoff, `MUNAFA_RETRY_BASE_DELAY`
+base) before raising `RetryExhausted` -- a clear failure, never a hang, and
+never a silently-swallowed error. This exists specifically because of the
+rate-limiting finding below: without it, `api/` tests running in a burst are
+flaky for a reason unrelated to what they're actually testing.
+
+`ai/validate_generated.py` is a defense-in-depth static check for generated
+test files: `ast.parse` (syntax) plus a scan for calls/imports (`eval`,
+`os.system`, `subprocess`, ...) that have no business in an HTTP test.
+`generate_tests.py` already refuses to write a file that doesn't compile, so
+this mainly guards against a hand-edited file in `generated/pending/` before
+it's approved.
+
+```bash
+python ai/validate_generated.py generated/pending/test_ai_generated.py
+```
+
 ## Known production finding
 
 While validating this suite, it caught a real issue: the `/api/yahoo/*`

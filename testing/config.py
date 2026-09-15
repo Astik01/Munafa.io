@@ -12,5 +12,7 @@ def _clean(url: str) -> str:
 
 BASE_URL = _clean(os.getenv("MUNAFA_BASE_URL", "https://munafa-io.vercel.app"))
 REQUEST_TIMEOUT = float(os.getenv("MUNAFA_REQUEST_TIMEOUT", "10"))
+MAX_RETRIES = int(os.getenv("MUNAFA_MAX_RETRIES", "3"))
+RETRY_BASE_DELAY = float(os.getenv("MUNAFA_RETRY_BASE_DELAY", "1.0"))
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5")

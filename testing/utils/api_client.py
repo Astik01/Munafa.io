@@ -18,7 +18,8 @@ from typing import Any
 
 import requests
 
-from config import BASE_URL, REQUEST_TIMEOUT
+from config import BASE_URL, MAX_RETRIES, REQUEST_TIMEOUT, RETRY_BASE_DELAY
+from utils.retry import retry_on_transient_failure
 
 
 @dataclass
@@ -38,6 +39,7 @@ class APIClient:
             headers.update(extra)
         return headers
 
+    @retry_on_transient_failure(max_attempts=MAX_RETRIES, base_delay=RETRY_BASE_DELAY)
     def get_raw(
         self,
         path: str,
@@ -45,9 +47,11 @@ class APIClient:
         timeout: float | None = None,
         headers: dict | None = None,
     ) -> requests.Response:
-        """GET an arbitrary path under base_url. Raises requests exceptions
-        (Timeout, ConnectionError, ...) rather than swallowing them -- callers
-        decide whether that counts as a failure or an expected condition."""
+        """GET an arbitrary path under base_url. A ConnectionError/Timeout or
+        a transient status (429/502/503/504) is retried with backoff (see
+        utils/retry.py) up to MAX_RETRIES times before raising RetryExhausted
+        -- callers never hang waiting on a stuck upstream, and a request that
+        fails outright still raises rather than being swallowed."""
         url = f"{self.base_url}{path}"
         return self.session.get(
             url,
