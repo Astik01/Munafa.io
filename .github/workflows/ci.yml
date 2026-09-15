@@ -36,29 +36,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install frontend dependencies
-        run: npm ci
-
-      - name: Start local dev server (serves the /api/yahoo proxy under test)
-        # Runs the suite against `vite dev` rather than the live Vercel
-        # deployment: the deployment's edge network rate-limits /api/yahoo/*
-        # under bursty load (see testing/README.md's known_issues), so
-        # hammering production from CI on every push would be both a bad
-        # citizen and a source of pure infra flakiness unrelated to the code.
-        run: |
-          nohup npm run dev > vite-dev.log 2>&1 &
-          for i in $(seq 1 30); do
-            curl -sf http://localhost:5173/ > /dev/null && break
-            sleep 1
-          done
-          curl -sf http://localhost:5173/ > /dev/null || (cat vite-dev.log && exit 1)
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -73,17 +50,41 @@ jobs:
         working-directory: testing
         run: python -m pytest unit -v
 
-      - name: Integration / API / AI-generated tests (live proxy -- informational)
-        # Non-blocking: these exercise a real third-party dependency
-        # (Yahoo Finance) through our own proxy, so a transient failure here
-        # reflects that dependency's flakiness, not necessarily a code
-        # regression. Unit tests above are what actually gates the build.
+      - name: API tests (mocked upstream -- must pass)
+        # api/test_yahoo_chart_endpoint.py mocks Yahoo's response for these
+        # (see that file's docstring) -- they exercise api_client/
+        # ResponseValidator's handling of documented bad-input shapes, not
+        # Yahoo's live data, so they need no server and gate the build like
+        # unit tests do.
+        working-directory: testing
+        run: python -m pytest api -v
+
+      - name: Integration / AI-generated tests (informational)
+        # Non-blocking: integration/ and approved tests from
+        # ai/generate_tests.py may exercise the live proxy, so a transient
+        # failure can reflect Yahoo's flakiness rather than a real
+        # regression -- same reasoning as the api/ tests used to need before
+        # they were mocked, above. Both folders are empty right now (no
+        # integration/ tests yet; generated/approved/ only gets a file once
+        # a human approves one -- see that folder's own review-gate
+        # process), which pytest treats as exit code 5 ("no tests
+        # collected") rather than success -- tolerated here so that shows
+        # green, not a misleading permanent failure.
         working-directory: testing
         continue-on-error: true
         env:
-          MUNAFA_BASE_URL: http://localhost:5173
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: python -m pytest integration api generated/approved -v --ai-analyze
+        run: python -m pytest integration generated/approved -v --ai-analyze || [ "$?" -eq 5 ]
+
+      # @pytest.mark.live tests (real calls to the live deployment, kept to
+      # one symbol in api/test_yahoo_chart_endpoint.py) are deliberately not
+      # run here -- pytest.ini's `addopts = -m "not live"` excludes them from
+      # every default `pytest` invocation above, on purpose: a previous
+      # version of this job ran dozens of real requests against Yahoo's
+      # unofficial, rate-limited endpoint on every push and was flaky as a
+      # result (RetryExhausted 429s unrelated to any real regression). Same
+      # call as the Vitest side's `npm run test:integration`, which is also
+      # not wired into CI -- run `pytest -m live` locally on demand instead.
 
       - name: Upload test reports
         if: always()

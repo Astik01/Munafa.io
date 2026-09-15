@@ -63,6 +63,7 @@ def pytest_configure(config: pytest.Config) -> None:
     config._munafa_reporter = TestReporter()
     config.addinivalue_line("markers", "security: marks tests probing injection/auth-bypass style inputs")
     config.addinivalue_line("markers", "ai_generated: marks tests written by the AI test-case generator")
+    config.addinivalue_line("markers", "live: marks tests that make a real network call to the live deployment")
 
 
 def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo) -> None:

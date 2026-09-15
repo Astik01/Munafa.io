@@ -36,7 +36,9 @@ testing/
     analyze_failures.py    pytest report -> plain-English failure analysis
   unit/          tests of the framework's own utilities (no network)
   integration/   multi-step flows against the live proxy
-  api/           single-endpoint contract tests against the live proxy
+  api/           single-endpoint contract tests for the proxy -- mostly
+                 mocked (api_client.session.get), plus a couple of
+                 @pytest.mark.live smoke tests against the real deployment
   regression/    tests pinned to specific bugs found along the way
   generated/
     pending/       AI-generated tests land here -- NOT run by pytest
@@ -53,7 +55,30 @@ cp .env.example .env   # set MUNAFA_BASE_URL if not testing prod, and ANTHROPIC_
 pytest                  # unit + integration + api + regression + generated/approved
 pytest unit             # just the offline tests (no network, deterministic)
 pytest -m security      # just the injection/edge-case security tests
+pytest -m live          # the few tests that hit the real deployment (see "Live vs. mocked" below)
 ```
+
+### Live vs. mocked, and why
+
+`api/test_yahoo_chart_endpoint.py` used to make every one of its requests --
+missing/malformed params, injection payloads, invalid symbols, all of it --
+against the real endpoint. That's a lot of requests testing this repo's own
+handling of an *input*, not Yahoo's actual data, and running them all in a
+burst reliably tripped the rate limit described below (18 of 60 tests
+failing with `RetryExhausted` 429s was a real, reproduced run, not a
+hypothetical). Those cases are now mocked via
+`api_client.session.get` -- they test how `api_client`/`ResponseValidator`
+handle the response shapes Yahoo is documented to return for bad input
+(`spec/endpoints.json`'s `200_or_404_error` case), not Yahoo's live data,
+so they don't need the network at all.
+
+A couple of `@pytest.mark.live` tests are kept, hitting one real symbol
+(`RELIANCE.NS`) each with a `time.sleep(1)` between them, to prove the real
+end-to-end path still works. `pytest.ini`'s `addopts = -m "not live"`
+excludes them from every default `pytest` run (and therefore from CI's
+blocking gate) -- run them explicitly with `pytest -m live`, on demand,
+the same way the Vitest suite's live Yahoo test is run with
+`npm run test:integration` instead of `npm test`.
 
 ## The AI test-case generator, and why it's split in two
 
@@ -136,17 +161,26 @@ artifact, not source.
 `.github/workflows/ci.yml` runs this suite in a `python-api-testing` job
 alongside (not instead of) the existing frontend Vitest job:
 
-1. Starts `npm run dev` and waits for it to answer, so tests hit a local
-   `/api/yahoo/*` proxy rather than production.
-2. `pytest unit` -- offline, deterministic, **gates the build**.
-3. `pytest integration api generated/approved --ai-analyze` -- exercises the
-   live (well, locally-proxied) Yahoo dependency. Marked
-   `continue-on-error: true`: a failure here can mean the code regressed, or
-   it can mean Yahoo/the proxy is having a bad day, and a third-party
-   dependency's flakiness shouldn't block merges the way a real regression
-   should. `ANTHROPIC_API_KEY` comes from a repo secret if set; the step
-   degrades gracefully if it isn't (see Failure analysis above).
+1. `pytest unit` -- offline, deterministic, **gates the build**.
+2. `pytest api` -- mocked (see "Live vs. mocked" above), so this is also
+   deterministic and needs no server or network. **Gates the build**
+   alongside unit tests.
+3. `pytest integration generated/approved --ai-analyze` --
+   non-blocking (`continue-on-error: true`): both folders may exercise a
+   live proxy (`integration/` by name; an approved AI-generated test could,
+   per `generate_tests.py`), so a failure here can mean the code regressed
+   or that Yahoo's having a bad day, and a third-party dependency's
+   flakiness shouldn't block merges the way a real regression should. Both
+   folders are normally empty, which pytest treats as exit code 5 -- the
+   step tolerates that so an empty folder shows green. `ANTHROPIC_API_KEY`
+   comes from a repo secret if set; the step degrades gracefully if it
+   isn't (see Failure analysis above).
 4. Uploads `reports/latest.{json,html}` as a workflow artifact either way.
+
+`@pytest.mark.live` tests are **not** run in CI at all -- `pytest.ini`'s
+`addopts` excludes them from every default invocation above, on purpose
+(see "Live vs. mocked"). There's no local dev server to proxy through
+anymore either, since nothing in this job talks to Yahoo by default now.
 
 Deliberately not run in CI: `ai/generate_test_plan.py` and
 `generate_tests.py`. Generating tests calls a paid API and produces files
@@ -161,6 +195,7 @@ proxy is rate-limited by the hosting edge network independently of Yahoo's
 own limits -- a burst of as few as 4-5 requests in a couple of seconds
 returns `429 Edge: Too Many Requests` (plain text, not JSON), and the
 frontend's `fetchYahooChart()` has no special handling for it. See
-`api/test_yahoo_chart_endpoint.py`. It's also why the CI job above proxies
-locally instead of testing against production, and why the live-endpoint
-step is non-blocking.
+`api/test_yahoo_chart_endpoint.py`. It's also why that file mocks most of
+its own tests rather than hitting the real endpoint on every run (see
+"Live vs. mocked" above), and why `integration`/`generated/approved` and
+`@pytest.mark.live` stay out of the blocking CI gate.
