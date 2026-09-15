@@ -1,0 +1,59 @@
+{
+  "info": {
+    "title": "Munafa.io network surface",
+    "note": "Munafa has no backend of its own (no Express server, no database, no auth). The only real HTTP endpoint the frontend talks to is a same-origin rewrite that forwards to the Yahoo Finance unofficial chart API. Watchlist, search, and comparison are client-side only (localStorage + this one endpoint) and are NOT separate server routes, so they are intentionally not listed as paths here -- an OpenAPI-style spec for them would be fictional."
+  },
+  "paths": {
+    "/api/yahoo/v8/finance/chart/{symbol}": {
+      "get": {
+        "summary": "Proxied Yahoo Finance chart lookup for one NSE-listed symbol.",
+        "upstream": "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}",
+        "rewrite_defined_in": ["vercel.json", "vite.config.js"],
+        "used_by": "src/services/stockService.js (fetchYahooChart)",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "description": "NSE ticker with .NS suffix, e.g. RELIANCE.NS. No allowlist/validation happens before this reaches Yahoo."
+          },
+          {
+            "name": "interval",
+            "in": "query",
+            "required": true,
+            "type": "string",
+            "enum": ["1m", "5m", "15m", "1h", "1d", "1wk"],
+            "description": "Candle interval. The app only ever sends values from buildChartParams(), but the endpoint itself does not validate the value."
+          },
+          {
+            "name": "range",
+            "in": "query",
+            "required": true,
+            "type": "string",
+            "enum": ["1d", "5d", "1mo", "3mo", "6mo", "1y"],
+            "description": "Lookback window."
+          }
+        ],
+        "responses": {
+          "200_result": {
+            "description": "Symbol recognized by Yahoo.",
+            "shape": "chart.result[0].meta.{symbol,regularMarketPrice,...}, chart.result[0].indicators.quote[0].{open,high,low,close,volume}, chart.error is null"
+          },
+          "200_or_404_error": {
+            "description": "Symbol not recognized, or bad params. Yahoo answers with HTTP 200 or 404 (both observed) and a chart.error object rather than a 4xx body in most cases -- callers must check chart.error, not just status_code.",
+            "shape": "chart.result is null, chart.error.{code,description}"
+          },
+          "429": {
+            "description": "OBSERVED IN PRODUCTION: the /api/yahoo/* path is rate-limited by the hosting edge network independently of Yahoo's own limits. A short burst (as few as 4-5 requests within a couple of seconds) can trip it. Plain-text body 'Edge: Too Many Requests', not JSON. No documented threshold or Retry-After header.",
+            "shape": "text/html or text/plain body, not JSON"
+          }
+        },
+        "known_issues": [
+          "429 responses are undocumented and untyped -- the frontend's fetchYahooChart() does not special-case them, so a rate-limited call surfaces as a generic fetch failure.",
+          "No caching at the edge -- stockService.js's 30s in-memory cache only protects a single browser tab; concurrent users/tabs each spend their own quota against the same rate limit."
+        ]
+      }
+    }
+  }
+}
